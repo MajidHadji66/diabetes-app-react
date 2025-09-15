@@ -92,7 +92,7 @@ const DietTracker: React.FC = () => {
                             </div>
                             <div>
                                 <label htmlFor="mealType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Meal Type</label>
-                                <select id="mealType" value={type} onChange={e => setType(e.target.value as MealType)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md">
+                                <select id="mealType" value={type} onChange={e => setType(e.target.value as MealType)} className="mt-1 block w-full pl-3 pr-10 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm">
                                     {Object.values(MealType).map(t => <option key={t}>{t}</option>)}
                                 </select>
                             </div>
