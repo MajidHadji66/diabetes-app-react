@@ -1,0 +1,5 @@
+{
+  "name": "DiaSync - Personal Diabetes Manager",
+  "description": "A personal behavior-tracking app to help manage Type 2 Diabetes by tracking diet, exercise, glucose levels, and providing AI-powered insights for a healthier lifestyle.",
+  "requestFramePermissions": []
+}
