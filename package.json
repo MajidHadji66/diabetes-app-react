@@ -1,7 +1,32 @@
 {
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:client": "vite",
+    "dev:server": "cd server && npm run dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "gh-pages -d dist"
+  },
   "name": "diasync",
   "version": "1.0.0",
   "description": "A personal behavior-tracking app to help manage Type 2 Diabetes by tracking diet, exercise, glucose levels, and providing AI-powered insights for a healthier lifestyle.",
   "homepage": "https://MajidHadji66.github.io/diabetes-app-react",
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@vitejs/plugin-react": "^5.0.2",
+    "autoprefixer": "^10.4.22",
+    "concurrently": "^9.1.0",
+    "gh-pages": "^6.3.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "vite": "^7.1.5"
+  },
+  "dependencies": {
+    "@google/genai": "^1.19.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.1",
+    "recharts": "^3.2.0"
+  }
 }
