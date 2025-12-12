@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const { GoogleGenAI } = require("@google/genai");
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
@@ -101,20 +102,55 @@ const runDexcomBridge = (action, username, password, region) => {
     });
 };
 
+// --- Credential Persistence ---
+const CREDS_FILE = path.join(__dirname, '.dexcom-creds.json');
+
+function loadCreds() {
+    try {
+        if (fs.existsSync(CREDS_FILE)) {
+            const data = fs.readFileSync(CREDS_FILE, 'utf8');
+            global.dexcomCreds = JSON.parse(data);
+            console.log('Loaded Dexcom credentials from file.');
+        }
+    } catch (err) {
+        console.error('Failed to load credentials:', err);
+    }
+}
+
+function saveCreds(creds) {
+    try {
+        fs.writeFileSync(CREDS_FILE, JSON.stringify(creds, null, 2));
+        console.log('Saved Dexcom credentials to file.');
+    } catch (err) {
+        console.error('Failed to save credentials:', err);
+    }
+}
+
+// Load on startup
+loadCreds();
+
+// --- API Routes ---
+
 // 1. Authenticate (Verify Credentials via Bridge)
 app.post('/api/dexcom/connect', async (req, res) => {
-    console.log('[Dexcom] Login Request received');
     try {
         const { username, password, region = 'US' } = req.body;
+        console.log(`Attempting Dexcom connection for user: ${username} (${region})`);
 
-        // We verify by trying to "login" (which in bridge means init Dexcom obj)
+        // Use the Python bridge to validate credentials
         const result = await runDexcomBridge('login', username, password, region);
 
-        console.log('[Dexcom] Login successful (verified via Python)');
+        if (!result.success) {
+            console.error('Dexcom Login Failed:', result.error);
+            return res.status(401).json({ success: false, error: result.error || 'Invalid Credentials' });
+        }
 
-        // Store credentials in memory for subsequent reading requests
-        // WARNING: In production this should be encrypted session storage
-        global.dexcomCreds = { username, password, region };
+        console.log('Dexcom Login Successful');
+
+        // Store credentials in memory AND file for persistence
+        const newCreds = { username, password, region };
+        global.dexcomCreds = newCreds;
+        saveCreds(newCreds);
 
         // Since pydexcom handles session internally per request, we can just return a dummy session ID
         // or the timestamp to indicate "connected". The frontend expects a session ID.

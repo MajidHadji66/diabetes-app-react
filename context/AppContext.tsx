@@ -132,8 +132,56 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [state, dispatch] = useReducer(appReducer, initialState);
 
   useEffect(() => {
-    // Here you could persist state to localStorage if desired
-  }, [state]);
+    const hydrateSession = async () => {
+      const sessionId = localStorage.getItem('dexcomSessionId');
+      if (sessionId) {
+        const region = localStorage.getItem('dexcomRegion') as 'US' | 'OUS' || 'US';
+        const username = localStorage.getItem('dexcomUsername');
+        const accountId = localStorage.getItem('dexcomAccountId');
+
+        // 1. Restore Connected State
+        dispatch({
+          type: 'UPDATE_SETTINGS',
+          payload: {
+            dexcom: {
+              connected: true,
+              region,
+              username: username || undefined,
+              accountId: accountId || undefined,
+              lastSync: new Date()
+            }
+          }
+        });
+
+        // 2. Fetch Real Data immediately to replace Mock Data
+        try {
+          const res = await fetch('/api/dexcom/readings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, region })
+          });
+
+          if (res.ok) {
+            const readings = await res.json();
+            if (readings.length > 0) {
+              const parsedReadings = readings.map((r: any) => ({
+                ...r,
+                timestamp: new Date(r.timestamp)
+              }));
+              dispatch({
+                type: 'REPLACE_GLUCOSE_READINGS',
+                payload: parsedReadings
+              });
+            }
+          }
+        } catch (error) {
+          console.error("Failed to rehydrate Dexcom data:", error);
+        }
+      }
+    };
+
+    hydrateSession();
+  }, []);
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>
