@@ -29,48 +29,55 @@ export interface Exercise {
 }
 
 export enum JournalTag {
-    GoodControl = 'Good Control',
-    Learning = 'Learning',
-    SlipUp = 'Slip-Up',
-    FeelingGreat = 'Feeling Great',
-    Stressed = 'Stressed',
+  GoodControl = 'Good Control',
+  Learning = 'Learning',
+  SlipUp = 'Slip-Up',
+  FeelingGreat = 'Feeling Great',
+  Stressed = 'Stressed',
 }
 
 export interface JournalEntry {
-    id: string;
-    notes: string;
-    mood: number; // 1-5 scale
-    tag?: JournalTag;
-    timestamp: Date;
+  id: string;
+  notes: string;
+  mood: number; // 1-5 scale
+  tag?: JournalTag;
+  timestamp: Date;
 }
 
 export interface Medication {
-    id: string;
-    name: string;
-    dosage: string;
-    time: string; // HH:MM format
-    reminderEnabled: boolean;
+  id: string;
+  name: string;
+  dosage: string;
+  time: string; // HH:MM format
+  reminderEnabled: boolean;
 }
 
 export interface Settings {
-    theme: 'light' | 'dark';
-    glucoseTargetRange: {
-        min: number;
-        max: number;
-    };
-    glucoseAlertLevels: {
-        low: number;
-        high: number;
-    };
+  theme: 'light' | 'dark';
+  glucoseTargetRange: {
+    min: number;
+    max: number;
+  };
+  glucoseAlertLevels: {
+    low: number;
+    high: number;
+  };
+  dexcom?: {
+    connected: boolean;
+    region: 'US' | 'OUS';
+    lastSync?: Date;
+    username?: string;
+    accountId?: string;
+  };
 }
 
 export interface AppState {
-    glucoseReadings: GlucoseReading[];
-    meals: Meal[];
-    exercises: Exercise[];
-    journalEntries: JournalEntry[];
-    medications: Medication[];
-    settings: Settings;
+  glucoseReadings: GlucoseReading[];
+  meals: Meal[];
+  exercises: Exercise[];
+  journalEntries: JournalEntry[];
+  medications: Medication[];
+  settings: Settings;
 }
 
 export type Action =
@@ -81,4 +88,5 @@ export type Action =
   | { type: 'ADD_MEDICATION'; payload: Medication }
   | { type: 'REMOVE_MEDICATION'; payload: { id: string } }
   | { type: 'TOGGLE_MEDICATION_REMINDER'; payload: { id: string } }
-  | { type: 'IMPORT_DATA'; payload: { glucoseReadings: GlucoseReading[]; meals: Meal[]; exercises: Exercise[] } };
+  | { type: 'IMPORT_DATA'; payload: { glucoseReadings: GlucoseReading[]; meals: Meal[]; exercises: Exercise[] } }
+  | { type: 'REPLACE_GLUCOSE_READINGS'; payload: GlucoseReading[] };

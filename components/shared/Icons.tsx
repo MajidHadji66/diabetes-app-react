@@ -122,3 +122,10 @@ export const BellSlashIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) =>
     <line x1="1" y1="1" x2="23" y2="23"></line>
   </Icon>
 );
+
+export const XMarkIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <Icon {...props}>
+    <line x1="18" y1="6" x2="6" y2="18"></line>
+    <line x1="6" y1="6" x2="18" y2="18"></line>
+  </Icon>
+);

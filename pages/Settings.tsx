@@ -1,9 +1,85 @@
 
 import React, { useState, useEffect } from 'react';
 import Card from '../components/ui/Card';
-import { useAppContext } from '../context/AppContext';
+import { useAppContext, useDexcom } from '../context/AppContext';
 import { Settings as SettingsType, Medication, GlucoseReading, Meal, Exercise, MealType } from '../types';
 import { ClockIcon, TrashIcon, BellIcon, BellSlashIcon } from '../components/shared/Icons';
+
+// --- Components ---
+
+const DexcomLoginForm: React.FC = () => {
+    const { connect, sync } = useDexcom();
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [region, setRegion] = useState('US');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError('');
+
+        const result = await connect(username, password, region);
+        if (result.success) {
+            // Initial sync
+            await sync();
+        } else {
+            setError(result.error || 'Connection failed');
+        }
+        setLoading(false);
+    };
+
+    return (
+        <form onSubmit={handleLogin} className="space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-md text-sm text-blue-800 dark:text-blue-200 mb-4">
+                Connect your Dexcom account to import glucose readings via Dexcom Share. Your credentials are sent securely to your local server only.
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Username</label>
+                <input
+                    type="text"
+                    value={username}
+                    onChange={e => setUsername(e.target.value)}
+                    className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    required
+                />
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+                <input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    required
+                />
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Region</label>
+                <select
+                    value={region}
+                    onChange={e => setRegion(e.target.value)}
+                    className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                >
+                    <option value="US">United States</option>
+                    <option value="OUS">Outside US</option>
+                </select>
+            </div>
+
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+
+            <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+            >
+                {loading ? 'Connecting...' : 'Connect Dexcom'}
+            </button>
+        </form>
+    );
+};
 
 // A simple toggle switch component for UI consistency
 const ToggleSwitch: React.FC<{ enabled: boolean; onChange: () => void }> = ({ enabled, onChange }) => (
@@ -89,7 +165,7 @@ const Settings: React.FC = () => {
     const handleExportData = () => {
         const { glucoseReadings, meals, exercises } = state;
         const headers = 'type,id,timestamp,value,carbs,name,mealType,photoUrl,duration,exerciseType\n';
-        
+
         const glucoseCsv = glucoseReadings.map(g => `glucose,${g.id},${g.timestamp.toISOString()},${g.value},,,,,,\n`).join('');
         const mealsCsv = meals.map(m => `meal,${m.id},${m.timestamp.toISOString()},,${m.carbs},${m.name},${m.type},${m.photoUrl},,\n`).join('');
         const exercisesCsv = exercises.map(e => `exercise,${e.id},${e.timestamp.toISOString()},,,,,,,${e.duration},${e.type}\n`).join('');
@@ -142,7 +218,7 @@ const Settings: React.FC = () => {
                 console.error("Error parsing CSV:", err);
                 setImportStatus('error');
             } finally {
-                 setTimeout(() => setImportStatus('idle'), 3000);
+                setTimeout(() => setImportStatus('idle'), 3000);
             }
         };
         reader.readAsText(file);
@@ -152,7 +228,7 @@ const Settings: React.FC = () => {
     return (
         <div>
             <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-6">Settings</h1>
-            
+
             <div className="space-y-8 max-w-2xl">
                 <Card>
                     <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">Glucose Targets</h2>
@@ -160,15 +236,15 @@ const Settings: React.FC = () => {
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Target Range (mg/dL)</label>
                             <div className="flex items-center space-x-2 mt-1">
-                                <input 
-                                    type="number" 
+                                <input
+                                    type="number"
                                     value={settings.glucoseTargetRange.min}
                                     onChange={e => handleRangeChange('glucoseTargetRange', 'min', e.target.value)}
                                     className="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                                 />
                                 <span className="text-gray-500">to</span>
-                                <input 
-                                    type="number" 
+                                <input
+                                    type="number"
                                     value={settings.glucoseTargetRange.max}
                                     onChange={e => handleRangeChange('glucoseTargetRange', 'max', e.target.value)}
                                     className="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
@@ -178,16 +254,16 @@ const Settings: React.FC = () => {
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Alert Levels (mg/dL)</label>
                             <div className="flex items-center space-x-2 mt-1">
-                                <input 
-                                    type="number" 
+                                <input
+                                    type="number"
                                     placeholder="Low"
                                     value={settings.glucoseAlertLevels.low}
                                     onChange={e => handleRangeChange('glucoseAlertLevels', 'low', e.target.value)}
                                     className="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                                 />
                                 <span className="text-gray-500">and</span>
-                                 <input 
-                                    type="number" 
+                                <input
+                                    type="number"
                                     placeholder="High"
                                     value={settings.glucoseAlertLevels.high}
                                     onChange={e => handleRangeChange('glucoseAlertLevels', 'high', e.target.value)}
@@ -196,8 +272,8 @@ const Settings: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                     <div className="mt-6">
-                        <button 
+                    <div className="mt-6">
+                        <button
                             onClick={handleSaveGlucoseSettings}
                             disabled={!hasChanges}
                             className="w-full sm:w-auto px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
@@ -213,32 +289,32 @@ const Settings: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label htmlFor="medName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Medication Name</label>
-                                <input type="text" id="medName" value={medName} onChange={e => setMedName(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm" placeholder="e.g., Metformin" required/>
+                                <input type="text" id="medName" value={medName} onChange={e => setMedName(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm" placeholder="e.g., Metformin" required />
                             </div>
-                             <div>
+                            <div>
                                 <label htmlFor="medDosage" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Dosage</label>
-                                <input type="text" id="medDosage" value={medDosage} onChange={e => setMedDosage(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm" placeholder="e.g., 500mg" required/>
+                                <input type="text" id="medDosage" value={medDosage} onChange={e => setMedDosage(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm" placeholder="e.g., 500mg" required />
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                             <div>
+                            <div>
                                 <label htmlFor="medTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Time</label>
-                                <input type="time" id="medTime" value={medTime} onChange={e => setMedTime(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm" required/>
+                                <input type="time" id="medTime" value={medTime} onChange={e => setMedTime(e.target.value)} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm" required />
                             </div>
                             <div className="flex items-center space-x-2">
                                 <input type="checkbox" id="medReminder" checked={medReminder} onChange={e => setMedReminder(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
                                 <label htmlFor="medReminder" className="text-sm font-medium text-gray-700 dark:text-gray-300">Enable Reminder</label>
                             </div>
                         </div>
-                         <button type="submit" className="w-full sm:w-auto px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">Add Medication</button>
+                        <button type="submit" className="w-full sm:w-auto px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">Add Medication</button>
                     </form>
-                    
+
                     <div className="mt-6 space-y-4">
                         {state.medications.length === 0 && <p className="text-gray-500 dark:text-gray-400">No medications scheduled.</p>}
                         {state.medications.map(med => (
                             <div key={med.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                                 <div className="flex items-center">
-                                    <ClockIcon className="w-5 h-5 mr-3 text-primary-500"/>
+                                    <ClockIcon className="w-5 h-5 mr-3 text-primary-500" />
                                     <div>
                                         <p className="font-bold text-gray-800 dark:text-white">{med.name} <span className="font-normal text-gray-500 dark:text-gray-400">({med.dosage})</span></p>
                                         <p className="text-sm text-gray-600 dark:text-gray-300">{med.time}</p>
@@ -246,16 +322,48 @@ const Settings: React.FC = () => {
                                 </div>
                                 <div className="flex items-center space-x-4">
                                     <div className="flex items-center space-x-2">
-                                        { med.reminderEnabled ? <BellIcon className="w-5 h-5 text-green-500"/> : <BellSlashIcon className="w-5 h-5 text-gray-400"/>}
+                                        {med.reminderEnabled ? <BellIcon className="w-5 h-5 text-green-500" /> : <BellSlashIcon className="w-5 h-5 text-gray-400" />}
                                         <ToggleSwitch enabled={med.reminderEnabled} onChange={() => handleToggleReminder(med.id)} />
                                     </div>
                                     <button onClick={() => handleRemoveMedication(med.id)} className="text-gray-400 hover:text-red-500 transition-colors">
-                                        <TrashIcon className="w-5 h-5"/>
+                                        <TrashIcon className="w-5 h-5" />
                                     </button>
                                 </div>
                             </div>
                         ))}
                     </div>
+                </Card>
+
+                {/* Dexcom Integration Card */}
+                <Card>
+                    <div className="flex justify-between items-start mb-4">
+                        <h2 className="text-xl font-bold text-gray-800 dark:text-white">Dexcom G6 Connection</h2>
+                        {state.settings.dexcom?.connected && (
+                            <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">Connected</span>
+                        )}
+                    </div>
+
+                    {!state.settings.dexcom?.connected ? (
+                        <DexcomLoginForm />
+                    ) : (
+                        <div className="space-y-4">
+                            <p className="text-sm text-gray-600 dark:text-gray-300">
+                                Your Dexcom account is connected. Data is syncing from the <strong>{state.settings.dexcom?.region}</strong> region.
+                            </p>
+                            {state.settings.dexcom?.lastSync && (
+                                <p className="text-xs text-gray-500">Last synced: {state.settings.dexcom.lastSync.toLocaleTimeString()}</p>
+                            )}
+                            <button
+                                onClick={() => {
+                                    localStorage.removeItem('dexcomSessionId');
+                                    dispatch({ type: 'UPDATE_SETTINGS', payload: { dexcom: { connected: false, region: 'US' } } });
+                                }}
+                                className="text-sm text-red-600 hover:text-red-800"
+                            >
+                                Disconnect Account
+                            </button>
+                        </div>
+                    )}
                 </Card>
 
                 <Card>
@@ -267,11 +375,11 @@ const Settings: React.FC = () => {
                                 Export All Data to CSV
                             </button>
                         </div>
-                         <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                             <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Import data from a CSV file. The format must match the one used for exporting.</p>
-                            <input type="file" accept=".csv" onChange={handleImportData} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"/>
-                             {importStatus === 'success' && <p className="text-sm text-green-600 mt-2">Data imported successfully!</p>}
-                             {importStatus === 'error' && <p className="text-sm text-red-600 mt-2">Failed to import data. Please check file format.</p>}
+                            <input type="file" accept=".csv" onChange={handleImportData} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100" />
+                            {importStatus === 'success' && <p className="text-sm text-green-600 mt-2">Data imported successfully!</p>}
+                            {importStatus === 'error' && <p className="text-sm text-red-600 mt-2">Failed to import data. Please check file format.</p>}
                         </div>
                     </div>
                 </Card>

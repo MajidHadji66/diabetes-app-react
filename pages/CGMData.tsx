@@ -4,12 +4,15 @@ import Card from '../components/ui/Card';
 import GlucoseChart from '../components/dashboard/GlucoseChart';
 import { useAppContext } from '../context/AppContext';
 
+import DexcomConnectModal from '../components/shared/DexcomConnectModal';
+
 type TimeRange = '24h' | '7d' | '30d';
 
 const CGMData: React.FC = () => {
     const { state } = useAppContext();
     const { glucoseReadings, settings } = state;
     const [timeRange, setTimeRange] = useState<TimeRange>('24h');
+    const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
 
     const now = new Date().getTime();
     let days = 1;
@@ -27,9 +30,45 @@ const CGMData: React.FC = () => {
 
     const averageGlucose = totalReadings > 0 ? (filteredData.reduce((acc, r) => acc + r.value, 0) / totalReadings).toFixed(0) : 'N/A';
 
+    const username = settings.dexcom?.username?.split('@')[0];
+    const isConnected = settings.dexcom?.connected;
+
     return (
         <div>
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-6">CGM Data Explorer</h1>
+            <DexcomConnectModal isOpen={isConnectModalOpen} onClose={() => setIsConnectModalOpen(false)} />
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold text-gray-800 dark:text-white">CGM Data Explorer</h1>
+                <div
+                    onClick={() => setIsConnectModalOpen(true)}
+                    className={`px-4 py-2 rounded-full font-semibold text-sm cursor-pointer hover:opacity-80 transition-opacity ${isConnected ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}
+                >
+                    <span className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
+                        {isConnected ? `Live Data: ${username || 'Connected'}` : 'Demo Mode (Click to Connect)'}
+                    </span>
+                </div>
+            </div>
+
+            {isConnected && (
+                <Card className="mb-6 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700">
+                    <div className="flex items-start">
+                        <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            </svg>
+                        </div>
+                        <div className="ml-3">
+                            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-100">Historical Data Notice</h3>
+                            <div className="mt-2 text-sm text-blue-700 dark:text-blue-200">
+                                <p>
+                                    The Dexcom Share API only allows fetching the last <strong>24 hours</strong> of data.
+                                    Your 7-day and 30-day statistics will become more accurate over time as this app builds its own local history from your daily usage.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+            )}
             <Card>
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-bold text-gray-800 dark:text-white">Glucose Trends</h2>
@@ -56,12 +95,12 @@ const CGMData: React.FC = () => {
                         <p className="text-3xl font-bold text-green-500">{getPercentage(timeInRange)}%</p>
                         <p className="text-sm text-gray-400">{settings.glucoseTargetRange.min}-{settings.glucoseTargetRange.max} mg/dL</p>
                     </Card>
-                     <Card>
+                    <Card>
                         <h3 className="font-semibold text-gray-500 dark:text-gray-400">Time High</h3>
                         <p className="text-3xl font-bold text-red-500">{getPercentage(timeHigh)}%</p>
                         <p className="text-sm text-gray-400">&gt; {settings.glucoseTargetRange.max} mg/dL</p>
                     </Card>
-                     <Card>
+                    <Card>
                         <h3 className="font-semibold text-gray-500 dark:text-gray-400">Time Low</h3>
                         <p className="text-3xl font-bold text-yellow-500">{getPercentage(timeLow)}%</p>
                         <p className="text-sm text-gray-400">&lt; {settings.glucoseTargetRange.min} mg/dL</p>
