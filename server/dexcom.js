@@ -63,15 +63,30 @@ const Client = (function () {
             this._baseUrl = OutOfUS ? URL_BASE_OUS : URL_BASE
         }
 
-        _request(endpoint, data) {
-            return fetch(this._baseUrl + endpoint, {
+        async _request(endpoint, data) {
+            const response = await fetch(this._baseUrl + endpoint, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Accept: "application/json",
                 },
                 body: JSON.stringify(data),
-            }).then(response => response.json())
+            });
+
+            const text = await response.text();
+
+            if (!response.ok) {
+                throw new Error(`Dexcom API Error (${response.status}): ${text}`);
+            }
+
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                // Determine if it was just a string response (which is valid for session ID sometimes)
+                // If it's a valid string but not JSON formatted (rare for this API), return text.
+                // Actually Dexcom usually returns JSON strings like "0000-..." so JSON.parse works.
+                throw new Error(`Failed to parse Dexcom response: ${text.substring(0, 50)}...`);
+            }
         }
 
         _authenticate(username, password) {
@@ -101,7 +116,10 @@ const Client = (function () {
                 const accountId = await this._authenticate(username, password)
                 this.sessionId = await this._login(accountId, password)
             } catch (e) {
-                throw new Error("Error creating session")
+                console.error("Dexcom Login Error Details:", e);
+                // Try to get JSON error message if possible
+                const msg = e.message || JSON.stringify(e);
+                throw new Error("Error creating session: " + msg);
             }
 
             if (this.sessionId == DEFAULT_SESSION_ID)

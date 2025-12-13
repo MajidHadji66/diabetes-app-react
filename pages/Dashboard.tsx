@@ -110,7 +110,7 @@ const Dashboard: React.FC = () => {
                             </div>
                         )}
                     </Card>
-                    <Card className="bg-primary-500 text-white">
+                    <Card className="!bg-primary-500 text-white">
                         <p className="text-lg font-semibold">{quote}</p>
                     </Card>
                 </div>
