@@ -15,6 +15,11 @@ const apiKey = process.env.GEMINI_API_KEY;
 // Initialize with just the API key, the SDK handles the rest
 const ai = new GoogleGenAI({ apiKey });
 
+// Add root route to verify server status
+app.get('/', (req, res) => {
+    res.send('DiaSync API Server is running. Access API at /api/health');
+});
+
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });
 });
@@ -43,63 +48,19 @@ app.post('/api/insight', async (req, res) => {
     }
 });
 
-// --- Dexcom Share API Integration (Python Bridge) ---
+// --- Dexcom Share API Integration (Node.js) ---
+const Client = require('./dexcom');
 
-const { spawn } = require('child_process');
-
-// The user has pydexcom installed in this specific environment
-const PYTHON_PATH = 'C:/Users/Majid/AppData/Local/Programs/Python/Python313/python.exe';
-const BRIDGE_SCRIPT = path.join(__dirname, 'dexcom_bridge.py');
-
-const runDexcomBridge = (action, username, password, region) => {
-    return new Promise((resolve, reject) => {
-        const args = [
-            BRIDGE_SCRIPT,
-            '--action', action,
-            '--username', username,
-            '--password', password,
-            '--region', region
-        ];
-
-        console.log(`[DexcomBridge] Spawning: ${PYTHON_PATH} ${args.join(' ')}`);
-
-        // Hide password in logs
-        const logArgs = [...args];
-        logArgs[4] = '********';
-        // console.log(`[DexcomBridge] Running with args: ${logArgs.join(' ')}`);
-
-        const pythonProcess = spawn(PYTHON_PATH, args);
-
-        let dataString = '';
-        let errorString = '';
-
-        pythonProcess.stdout.on('data', (data) => {
-            dataString += data.toString();
-        });
-
-        pythonProcess.stderr.on('data', (data) => {
-            errorString += data.toString();
-            console.error(`[DexcomBridge] Stderr: ${data}`);
-        });
-
-        pythonProcess.on('close', (code) => {
-            if (code !== 0) {
-                reject(new Error(`Python process exited with code ${code}: ${errorString}`));
-                return;
-            }
-
-            try {
-                const result = JSON.parse(dataString);
-                if (result.success) {
-                    resolve(result);
-                } else {
-                    reject(new Error(result.error || 'Unknown Dexcom Error'));
-                }
-            } catch (e) {
-                reject(new Error(`Failed to parse Python output: ${e.message}. Raw: ${dataString}`));
-            }
-        });
-    });
+// Helper to get authenticated client
+const getAuthenticatedClient = async (username, password, region) => {
+    const isOUS = region === 'OUS' || region === 'ous';
+    const client = new Client(isOUS);
+    try {
+        await client.login(username, password);
+        return client;
+    } catch (error) {
+        throw new Error(`Dexcom Login Failed: ${error.message}`);
+    }
 };
 
 // --- Credential Persistence ---
@@ -131,19 +92,13 @@ loadCreds();
 
 // --- API Routes ---
 
-// 1. Authenticate (Verify Credentials via Bridge)
+// 1. Authenticate (Verify Credentials)
 app.post('/api/dexcom/connect', async (req, res) => {
     try {
         const { username, password, region = 'US' } = req.body;
         console.log(`Attempting Dexcom connection for user: ${username} (${region})`);
 
-        // Use the Python bridge to validate credentials
-        const result = await runDexcomBridge('login', username, password, region);
-
-        if (!result.success) {
-            console.error('Dexcom Login Failed:', result.error);
-            return res.status(401).json({ success: false, error: result.error || 'Invalid Credentials' });
-        }
+        const client = await getAuthenticatedClient(username, password, region);
 
         console.log('Dexcom Login Successful');
 
@@ -152,13 +107,10 @@ app.post('/api/dexcom/connect', async (req, res) => {
         global.dexcomCreds = newCreds;
         saveCreds(newCreds);
 
-        // Since pydexcom handles session internally per request, we can just return a dummy session ID
-        // or the timestamp to indicate "connected". The frontend expects a session ID.
         res.json({
             success: true,
-            sessionId: 'pydexcom-session-active',
-            username: result.username,
-            accountId: result.accountId
+            sessionId: client.sessionId,
+            username: username
         });
     } catch (error) {
         console.error('Dexcom Connect Error:', error);
@@ -166,46 +118,31 @@ app.post('/api/dexcom/connect', async (req, res) => {
     }
 });
 
-// 2. Fetch Latest Readings (via Bridge)
+// 2. Fetch Latest Readings
 app.post('/api/dexcom/readings', async (req, res) => {
     try {
-        const { sessionId, region = 'US' } = req.body;
-
-        // NOTE: The frontend might not be sending username/password for reading requests 
-        // if it thinks it has a "sessionId". 
-        // However, pydexcom requires credentials every time (it doesn't persist session across CLI calls).
-        // WE NEED THE CREDENTIALS.
-        // But Settings.tsx doesn't send password in the '/readings' call usually, it usually just sends sessionId.
-        // Wait, looking at Settings.tsx... it calls `sync()` in `useDexcom`. 
-        // Let's check `useDexcom` hook in `AppContext.tsx` or similar.
-        // If the frontend doesn't send password, we are stuck unless we cache it or ask user to store it.
-        //
-        // TEMPORARY FIX: For this specific user session, we can store creds in memory variable 
-        // or we need to update Frontend to send creds.
-        // Securely, we should use a session on server. 
-        // For this local playground app, let's look at what we receive.
-
+        // We rely on stored credentials because we need to re-authenticate 
+        // to get a fresh client instance (or we could cache the client, but simple is better).
         if (!global.dexcomCreds) {
             return res.status(400).json({ error: 'Session expired. Please reconnect Dexcom.' });
         }
 
-        const { username, password } = global.dexcomCreds;
+        const { username, password, region } = global.dexcomCreds;
 
-        if (region !== global.dexcomCreds.region) {
-            // allow updating region
-        }
+        // Re-authenticate to ensure valid session
+        // (In a prod app, we'd reuse the session ID until it expires, but this library is simple)
+        const client = await getAuthenticatedClient(username, password, region);
 
-        const result = await runDexcomBridge('readings', username, password, region);
+        // fetchReadings(maxAge, maxCount)
+        const readings = await client.fetchReadings(1440, 288);
 
-        // Transform Python result to App format if needed, but bridge does good job.
-        // Bridge returns: { value, trend, time }
-        // App expects: { id, value, timestamp, trend }
-
-        const cleanData = result.data.map((r, i) => ({
+        // Transform to App format: { id, value, timestamp, trend }
+        // Library returns: { trend: { name, desc, arrow }, mgdl, mmol, time }
+        const cleanData = readings.map(r => ({
             id: `g-${new Date(r.time).getTime()}`,
-            value: r.value,
-            timestamp: r.time, // ISO string is fine for JSON
-            trend: r.trend
+            value: r.mgdl,
+            timestamp: r.time.toISOString(),
+            trend: r.trend.desc // using description ('steady', 'rising', etc.) or arrow
         }));
 
         res.json(cleanData);
